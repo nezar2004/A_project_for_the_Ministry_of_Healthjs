@@ -1,9 +1,14 @@
 import express from "express";
 import bodyParser from "body-parser";
+import cors from "cors";
 import { GoogleGenAI } from "@google/genai";
 
 const app = express();
 app.use(bodyParser.json());
+app.use(cors());
+
+// IMPORTANT: use Railway provided port
+const PORT = process.env.PORT || 3000;
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GOOGLE_API_KEY
@@ -32,6 +37,11 @@ app.post("/api/chat", async (req, res) => {
   }
 });
 
+app.get("/", (req, res) => {
+  res.send("Server is running!");
+});
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+// IMPORTANT: listen on 0.0.0.0
+app.listen(PORT, "0.0.0.0", () =>
+  console.log(`Server running on port ${PORT}`)
+);
