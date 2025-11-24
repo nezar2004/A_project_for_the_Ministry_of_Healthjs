@@ -11,5 +11,8 @@
     "express": "latest",
     "body-parser": "latest",
     "cors": "latest"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }
