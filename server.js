@@ -1,38 +1,28 @@
 import express from "express";
 import bodyParser from "body-parser";
 import cors from "cors";
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const app = express();
 app.use(bodyParser.json());
 app.use(cors());
 
-// IMPORTANT: use Railway provided port
 const PORT = process.env.PORT || 3000;
 
-const ai = new GoogleGenAI({
-  apiKey: process.env.GOOGLE_API_KEY
-});
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
+const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
 app.post("/api/chat", async (req, res) => {
   const question = req.body.question;
 
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash",
-      contents: [
-        { parts: [{ text: question }] }
-      ]
-    });
-
-    const answer =
-      response.candidates?.[0]?.content?.parts?.[0]?.text ||
-      "لم يصلني رد من الذكاء الاصطناعي.";
+    const result = await model.generateContent(question);
+    const answer = result.response.text();
 
     res.json({ answer });
 
-  } catch (e) {
-    console.error("AI ERROR:", e);
+  } catch (error) {
+    console.error("AI ERROR:", error);
     res.json({ answer: "خطأ في الاتصال بالسيرفر." });
   }
 });
@@ -41,7 +31,6 @@ app.get("/", (req, res) => {
   res.send("Server is running!");
 });
 
-// IMPORTANT: listen on 0.0.0.0
 app.listen(PORT, "0.0.0.0", () =>
   console.log(`Server running on port ${PORT}`)
 );
