@@ -31,10 +31,11 @@ app.post("/api/chat", async (req, res) => {
     );
 
     const data = await response.json();
-
+    console.log("RAW RESPONSE:", JSON.stringify(data, null, 2));
     const answer =
-      data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-      "لم يصلني رد من الذكاء الاصطناعي.";
+        data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+        "لم يصلني رد من الذكاء الاصطناعي.";
+
 
     res.json({ answer });
 
@@ -51,3 +52,4 @@ app.get("/", (req, res) => {
 app.listen(PORT, "0.0.0.0", () =>
   console.log("Server running on port " + PORT)
 );
+
