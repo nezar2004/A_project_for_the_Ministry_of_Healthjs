@@ -7,7 +7,7 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "@google/genai": "latest",
+    "@google/generative-ai": "latest"
     "express": "latest",
     "body-parser": "latest",
     "cors": "latest"
@@ -16,3 +16,4 @@
     "node": ">=18"
   }
 }
+
