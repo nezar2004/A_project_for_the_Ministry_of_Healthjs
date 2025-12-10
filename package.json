@@ -7,7 +7,7 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "@google/generative-ai": "latest"
+    "@google/genai": "latest"
     "express": "latest",
     "body-parser": "latest",
     "cors": "latest"
