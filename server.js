@@ -22,6 +22,7 @@ app.post("/api/chat", async (req, res) => {
         body: JSON.stringify({
           contents: [
             {
+              role: "user",
               parts: [{ text: question }]
             }
           ]
