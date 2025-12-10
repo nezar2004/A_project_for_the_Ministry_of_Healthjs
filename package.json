@@ -7,13 +7,12 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "@google/genai": "latest"
     "express": "latest",
     "body-parser": "latest",
-    "cors": "latest"
+    "cors": "latest",
+    "node-fetch": "3.3.2"
   },
   "engines": {
     "node": ">=18"
   }
 }
-
