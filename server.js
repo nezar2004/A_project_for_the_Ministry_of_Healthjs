@@ -11,7 +11,12 @@ const PORT = process.env.PORT || 3000;
 const API_KEY = process.env.GOOGLE_API_KEY;
 
 app.post("/api/chat", async (req, res) => {
+  console.log("=== /api/chat called ===");
+  console.log("BODY:", req.body);
+  console.log("API KEY EXISTS:", !!API_KEY);
+
   const question = req.body.question;
+  console.log("QUESTION:", question);
 
   if (!API_KEY) {
     return res.status(500).json({
@@ -45,8 +50,9 @@ app.post("/api/chat", async (req, res) => {
       }
     );
 
-    const data = await response.json();
+    console.log("GEMINI STATUS:", response.status);
 
+    const data = await response.json();
     console.log("RAW RESPONSE:", JSON.stringify(data, null, 2));
 
     if (!response.ok) {
@@ -59,10 +65,12 @@ app.post("/api/chat", async (req, res) => {
       data?.candidates?.[0]?.content?.parts?.[0]?.text ||
       "لم يصلني رد من الذكاء الاصطناعي.";
 
-    res.json({ answer });
+    console.log("FINAL ANSWER:", answer);
+
+    return res.json({ answer });
   } catch (err) {
     console.error("SERVER ERROR:", err);
-    res.status(500).json({
+    return res.status(500).json({
       answer: "حدث خطأ أثناء الاتصال بالسيرفر."
     });
   }
