@@ -1,16 +1,21 @@
 {
   "name": "chatbot-server",
   "version": "1.0.0",
+  "description": "Medical chatbot using Gemini API",
   "main": "server.js",
   "type": "module",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "node --watch server.js"
   },
+  "keywords": ["chatbot", "gemini", "ai", "medical"],
+  "author": "",
+  "license": "ISC",
   "dependencies": {
-    "express": "latest",
-    "body-parser": "latest",
-    "cors": "latest",
-    "node-fetch": "3.3.2"
+    "express": "^4.19.2",
+    "body-parser": "^1.20.2",
+    "cors": "^2.8.5",
+    "node-fetch": "^3.3.2"
   },
   "engines": {
     "node": ">=18"
