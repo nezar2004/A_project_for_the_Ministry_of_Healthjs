@@ -1,2 +1,0 @@
-# A_project_for_the_Ministry_of_Healthjs
-A_project_for_the_Ministry_of_Healthjs
