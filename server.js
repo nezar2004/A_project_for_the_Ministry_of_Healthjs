@@ -1,85 +1,89 @@
 import express from "express";
-import bodyParser from "body-parser";
 import cors from "cors";
-import fetch from "node-fetch";
 
 const app = express();
-app.use(bodyParser.json());
-app.use(cors());
-
-const PORT = process.env.PORT || 3000;
+const PORT = Number(process.env.PORT) || 3000;
 const API_KEY = process.env.GOOGLE_API_KEY;
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || "").split(",").map((v) => v.trim()).filter(Boolean);
+const requestBuckets = new Map();
 
-app.post("/api/chat", async (req, res) => {
-  console.log("=== /api/chat called ===");
-  console.log("BODY:", req.body);
-  console.log("API KEY EXISTS:", !!API_KEY);
+app.disable("x-powered-by");
+app.use(express.json({ limit: "16kb" }));
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  next();
+});
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || ALLOWED_ORIGINS.length === 0 || ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+    callback(new Error("Origin is not allowed"));
+  },
+  methods: ["GET", "POST"],
+  allowedHeaders: ["Content-Type"],
+  maxAge: 86400
+}));
 
-  const question = req.body.question;
-  console.log("QUESTION:", question);
-
-  if (!API_KEY) {
-    return res.status(500).json({
-      answer: "GOOGLE_API_KEY غير موجود في متغيرات البيئة."
-    });
+function rateLimit(req, res, next) {
+  const key = req.ip || "unknown";
+  const now = Date.now();
+  const current = requestBuckets.get(key);
+  if (!current || now - current.startedAt >= 60_000) {
+    requestBuckets.set(key, { startedAt: now, count: 1 });
+    return next();
   }
+  current.count += 1;
+  if (current.count > 12) return res.status(429).json({ answer: "تم إرسال طلبات كثيرة. حاول مرة أخرى بعد دقيقة." });
+  next();
+}
 
-  if (!question || !question.trim()) {
-    return res.status(400).json({
-      answer: "الرجاء إرسال السؤال."
-    });
-  }
+const SYSTEM_GUIDANCE = `أنت مساعد توعوي داخل منصة صحية أردنية. أجب بالعربية الواضحة باختصار.
+لا تشخّص الأمراض، ولا تصف أدوية أو جرعات، ولا تدّعي أنك طبيب. عند أعراض الطوارئ أو الخطر
+وجّه المستخدم فورًا إلى الطوارئ أو الرقم 911 في الأردن. لا تطلب رقمًا وطنيًا أو كلمة مرور أو
+بيانات طبية تعريفية. وضّح أن إجابتك معلومات عامة ولا تغني عن الطبيب.`;
 
+app.get("/health", (_req, res) => res.json({ status: "ok" }));
+app.get("/", (_req, res) => res.type("text/plain").send("Amal health assistant API"));
+
+app.post("/api/chat", rateLimit, async (req, res) => {
+  const question = typeof req.body?.question === "string" ? req.body.question.trim() : "";
+  if (!API_KEY) return res.status(503).json({ answer: "المساعد غير متاح مؤقتًا." });
+  if (!question) return res.status(400).json({ answer: "اكتب سؤالك أولًا." });
+  if (question.length > 800) return res.status(400).json({ answer: "السؤال طويل جدًا. اختصره إلى أقل من 800 حرف." });
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15_000);
   try {
-   const response = await fetch(
-    "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
-    {
+    const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": API_KEY
-      },
+      headers: { "Content-Type": "application/json", "x-goog-api-key": API_KEY },
+      signal: controller.signal,
       body: JSON.stringify({
-        contents: [
-          {
-            role: "user",
-            parts: [{ text: question }]
-          }
-        ]
+        systemInstruction: { parts: [{ text: SYSTEM_GUIDANCE }] },
+        contents: [{ role: "user", parts: [{ text: question }] }],
+        generationConfig: { temperature: 0.25, maxOutputTokens: 450 }
       })
-    }
-  );
-
-    console.log("GEMINI STATUS:", response.status);
-
-    const data = await response.json();
-    console.log("RAW RESPONSE:", JSON.stringify(data, null, 2));
-
-    if (!response.ok) {
-      return res.status(response.status).json({
-        answer: data?.error?.message || "حدث خطأ من Gemini API."
-      });
-    }
-
-    const answer =
-      data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-      "لم يصلني رد من الذكاء الاصطناعي.";
-
-    console.log("FINAL ANSWER:", answer);
-
-    return res.json({ answer });
-  } catch (err) {
-    console.error("SERVER ERROR:", err);
-    return res.status(500).json({
-      answer: "حدث خطأ أثناء الاتصال بالسيرفر."
     });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      console.error("Gemini request failed", response.status, data?.error?.status || "unknown");
+      return res.status(502).json({ answer: "تعذر الحصول على إجابة الآن. حاول لاحقًا." });
+    }
+    const answer = data?.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("\n").trim();
+    res.json({ answer: answer || "لم أتمكن من إعداد إجابة مناسبة." });
+  } catch (error) {
+    console.error("Chat request error", error?.name || "Error");
+    res.status(error?.name === "AbortError" ? 504 : 500).json({ answer: "حدث خطأ مؤقت أثناء الاتصال بالمساعد." });
+  } finally {
+    clearTimeout(timeout);
   }
 });
 
-app.get("/", (req, res) => {
-  res.send("Server is running!");
+app.use((error, _req, res, _next) => {
+  console.error("Request rejected", error?.message || "Unknown error");
+  res.status(403).json({ answer: "هذا المصدر غير مسموح له بالاتصال بالخدمة." });
 });
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Server running on port ${PORT}`);
-});
+app.listen(PORT, "0.0.0.0", () => console.log(`Amal API listening on port ${PORT}`));
