@@ -1,12 +1,14 @@
 import express from "express";
 import cors from "cors";
 
-const app = express();
+export const app = express();
+app.set("trust proxy", 1);
 const PORT = Number(process.env.PORT) || 3000;
 const API_KEY = process.env.GOOGLE_API_KEY;
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.1-flash-lite";
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || "").split(",").map((v) => v.trim()).filter(Boolean);
 const requestBuckets = new Map();
+const MAX_BUCKETS = 5000;
 
 app.disable("x-powered-by");
 app.use(express.json({ limit: "16kb" }));
@@ -23,11 +25,13 @@ app.use(cors({
     callback(new Error("Origin is not allowed"));
   },
   methods: ["GET", "POST"],
-  allowedHeaders: ["Content-Type"],
+  allowedHeaders: ["Content-Type", "Authorization"],
   maxAge: 86400
 }));
 
 function rateLimit(req, res, next) {
+  for (const [ip, bucket] of requestBuckets) { if (Date.now() - bucket.startedAt >= 60_000) requestBuckets.delete(ip); }
+  if (requestBuckets.size >= MAX_BUCKETS && !requestBuckets.has(req.ip)) return res.status(429).json({ answer: "الخدمة مشغولة. حاول لاحقًا." });
   const key = req.ip || "unknown";
   const now = Date.now();
   const current = requestBuckets.get(key);
@@ -62,7 +66,7 @@ app.post("/api/chat", rateLimit, async (req, res) => {
       headers: { "Content-Type": "application/json", "x-goog-api-key": API_KEY },
       signal: controller.signal,
       body: JSON.stringify({
-        systemInstruction: { parts: [{ text: SYSTEM_GUIDANCE }] },
+        systemInstruction: { parts: [{ text: SYSTEM_GUIDANCE + (req.body.language === "en" ? "\nRespond in English. Keep the same medical safety boundaries." : "") }] },
         contents: [{ role: "user", parts: [{ text: question }] }],
         generationConfig: { temperature: 0.25, maxOutputTokens: 450 }
       })
@@ -83,8 +87,10 @@ app.post("/api/chat", rateLimit, async (req, res) => {
 });
 
 app.use((error, _req, res, _next) => {
+  if (error.type === "entity.too.large") return res.status(413).json({ answer: "الطلب كبير جدًا." });
+  if (error instanceof SyntaxError && "body" in error) return res.status(400).json({ answer: "صيغة الطلب غير صحيحة." });
   console.error("Request rejected", error?.message || "Unknown error");
   res.status(403).json({ answer: "هذا المصدر غير مسموح له بالاتصال بالخدمة." });
 });
 
-app.listen(PORT, "0.0.0.0", () => console.log(`Amal API listening on port ${PORT}`));
+if (process.env.NODE_ENV !== "test") app.listen(PORT, "0.0.0.0", () => console.log(`Amal API listening on port ${PORT}`));

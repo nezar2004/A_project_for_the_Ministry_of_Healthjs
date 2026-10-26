@@ -6,9 +6,15 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "test": "node --test tests/*.test.js"
   },
-  "keywords": ["chatbot", "gemini", "ai", "medical"],
+  "keywords": [
+    "chatbot",
+    "gemini",
+    "ai",
+    "medical"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {
