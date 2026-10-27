@@ -2,6 +2,8 @@ import express from "express";
 import cors from "cors";
 import { bookingRouter } from "./firebase-backend.js";
 
+import { patientLoginRouter } from "./patient-login.js";
+
 export const app = express();
 app.set("trust proxy", 1);
 const PORT = Number(process.env.PORT) || 3000;
@@ -50,6 +52,7 @@ const SYSTEM_GUIDANCE = `أنت مساعد توعوي داخل منصة صحية
 وجّه المستخدم فورًا إلى الطوارئ أو الرقم 911 في الأردن. لا تطلب رقمًا وطنيًا أو كلمة مرور أو
 بيانات طبية تعريفية. وضّح أن إجابتك معلومات عامة ولا تغني عن الطبيب.`;
 
+app.use("/api", patientLoginRouter());
 app.use("/api", bookingRouter());
 
 app.get("/health", (_req, res) => res.json({ status: "ok" }));
