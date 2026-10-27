@@ -18,10 +18,14 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "cors": "^2.8.5",
     "express": "^4.19.2",
-    "cors": "^2.8.5"
+    "firebase-admin": "^14.5.0"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
+  },
+  "overrides": {
+    "@grpc/grpc-js": "^1.13.6"
   }
 }

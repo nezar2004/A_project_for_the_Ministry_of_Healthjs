@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import { bookingRouter } from "./firebase-backend.js";
 
 export const app = express();
 app.set("trust proxy", 1);
@@ -24,7 +25,7 @@ app.use(cors({
     if (!origin || ALLOWED_ORIGINS.length === 0 || ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
     callback(new Error("Origin is not allowed"));
   },
-  methods: ["GET", "POST"],
+  methods: ["GET", "POST", "PATCH"],
   allowedHeaders: ["Content-Type", "Authorization"],
   maxAge: 86400
 }));
@@ -48,6 +49,8 @@ const SYSTEM_GUIDANCE = `أنت مساعد توعوي داخل منصة صحية
 لا تشخّص الأمراض، ولا تصف أدوية أو جرعات، ولا تدّعي أنك طبيب. عند أعراض الطوارئ أو الخطر
 وجّه المستخدم فورًا إلى الطوارئ أو الرقم 911 في الأردن. لا تطلب رقمًا وطنيًا أو كلمة مرور أو
 بيانات طبية تعريفية. وضّح أن إجابتك معلومات عامة ولا تغني عن الطبيب.`;
+
+app.use("/api", bookingRouter());
 
 app.get("/health", (_req, res) => res.json({ status: "ok" }));
 app.get("/", (_req, res) => res.type("text/plain").send("Amal health assistant API"));
