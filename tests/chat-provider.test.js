@@ -1,0 +1,14 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {generateChatReply} from '../chat-provider.js';
+const args={apiKey:'fake',model:'test',question:'Hello',instructions:'Keep boundaries',pause:async()=>{}};
+const ok=(text='answer')=>({ok:true,json:async()=>({candidates:[{content:{parts:[{text}]}}]})});
+test('temporary provider rejection retries once and recovers',async()=>{let calls=0;const reply=await generateChatReply({...args,fetchImpl:async()=>++calls===1?{ok:false,status:503,json:async()=>({})}:ok()});assert.equal(reply,'answer');assert.equal(calls,2)});
+test('a real request timeout retries with a fresh signal and recovers',async()=>{let calls=0,firstSignal;const reply=await generateChatReply({...args,timeoutMs:10,fetchImpl:async(_url,{signal})=>{calls++;if(calls===1){firstSignal=signal;return new Promise((_,reject)=>signal.addEventListener('abort',()=>reject(Object.assign(Error(),{name:'AbortError'})),{once:true}))}assert.notEqual(signal,firstSignal);assert.equal(signal.aborted,false);return ok()}});assert.equal(reply,'answer');assert.equal(firstSignal.aborted,true);assert.equal(calls,2)});
+test('quota and invalid credentials are not retried',async()=>{for(const status of [429,403]){let calls=0;await assert.rejects(generateChatReply({...args,fetchImpl:async()=>{calls++;return{ok:false,status,json:async()=>({error:{message:'private detail'}})}}}),e=>e.status===502&&!e.message.includes('private'));assert.equal(calls,1)}});
+test('persistent outages stop after two attempts',async()=>{let calls=0;await assert.rejects(generateChatReply({...args,fetchImpl:async()=>{calls++;return{ok:false,status:503,json:async()=>({})}}}),e=>e.status===503&&e.code==='PROVIDER_UNAVAILABLE');assert.equal(calls,2)});
+test('connection failures get a single retry',async()=>{let calls=0;assert.equal(await generateChatReply({...args,fetchImpl:async()=>{if(++calls===1)throw new TypeError('network');return ok()}}),'answer');assert.equal(calls,2)});
+test('malformed and empty responses are safe bounded failures',async()=>{for(const json of [async()=>{throw new SyntaxError('private')},async()=>({})])await assert.rejects(generateChatReply({...args,fetchImpl:async()=>({ok:true,json})}),e=>e.status===502&&!e.message.includes('private'))});
+test('internal thought parts are excluded from the answer',async()=>{
+ const fetchImpl=async()=>({ok:true,json:async()=>({candidates:[{content:{parts:[{thought:true,text:'internal'},{text:'public answer'}]}}]})});
+ assert.equal(await generateChatReply({...args,fetchImpl}),'public answer');
+});
+test('temporary HTML error pages are retried using HTTP status',async()=>{let calls=0;assert.equal(await generateChatReply({...args,fetchImpl:async()=>++calls===1?{ok:false,status:503,json:async()=>{throw new SyntaxError('HTML error page')}}:ok()}),'answer');assert.equal(calls,2)});

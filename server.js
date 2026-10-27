@@ -4,6 +4,8 @@ import { bookingRouter } from "./firebase-backend.js";
 
 import { patientLoginRouter } from "./patient-login.js";
 
+import { generateChatReply } from "./chat-provider.js";
+
 export const app = express();
 app.set("trust proxy", 1);
 const PORT = Number(process.env.PORT) || 3000;
@@ -64,31 +66,18 @@ app.post("/api/chat", rateLimit, async (req, res) => {
   if (!question) return res.status(400).json({ answer: "اكتب سؤالك أولًا." });
   if (question.length > 800) return res.status(400).json({ answer: "السؤال طويل جدًا. اختصره إلى أقل من 800 حرف." });
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15_000);
+  const english=req.body.language==='en';
   try {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(GEMINI_MODEL)}:generateContent`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-goog-api-key": API_KEY },
-      signal: controller.signal,
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: SYSTEM_GUIDANCE + (req.body.language === "en" ? "\nRespond in English. Keep the same medical safety boundaries." : "") }] },
-        contents: [{ role: "user", parts: [{ text: question }] }],
-        generationConfig: { temperature: 0.25, maxOutputTokens: 450 }
-      })
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      console.error("Gemini request failed", response.status, data?.error?.status || "unknown");
-      return res.status(502).json({ answer: "تعذر الحصول على إجابة الآن. حاول لاحقًا." });
-    }
-    const answer = data?.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("\n").trim();
-    res.json({ answer: answer || "لم أتمكن من إعداد إجابة مناسبة." });
-  } catch (error) {
-    console.error("Chat request error", error?.name || "Error");
-    res.status(error?.name === "AbortError" ? 504 : 500).json({ answer: "حدث خطأ مؤقت أثناء الاتصال بالمساعد." });
-  } finally {
-    clearTimeout(timeout);
+    const answer=await generateChatReply({apiKey:API_KEY,model:GEMINI_MODEL,question,instructions:SYSTEM_GUIDANCE+(english?'\nRespond in English. Keep the same medical safety boundaries.':'')});
+    res.json({answer});
+  }catch(error){
+    console.error('Chat provider failure',error?.code||'UNKNOWN');
+    const code=error?.code;
+    const answer=code==='PROVIDER_TIMEOUT'?(english?'The assistant took too long after a second attempt. Please try again shortly.':'تأخر رد المساعد رغم إعادة المحاولة. حاول مجددًا بعد قليل.'):
+      code==='PROVIDER_QUOTA'?(english?'The assistant has reached its usage limit. Please try later.':'وصل المساعد إلى حد الاستخدام المتاح. حاول لاحقًا.'):
+      code==='PROVIDER_SAFETY'?(english?'I can offer general health information, but cannot provide a diagnosis or prescription.':'أستطيع تقديم معلومات صحية عامة، لكن لا أقدّم تشخيصًا أو وصفة طبية.'):
+      (english?'The AI service is temporarily unavailable. Please try again shortly.':'خدمة الذكاء الاصطناعي غير متاحة مؤقتًا. حاول بعد قليل.');
+    res.status(error?.status||502).json({answer,code:code||'PROVIDER_ERROR'});
   }
 });
 
