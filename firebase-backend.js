@@ -50,7 +50,8 @@ export function getBookingBackend() {
     return {...verified,project};
   };
   const service=createBookingService({db,verifyToken,catalog:loadCatalog});
-  cachedBackend={db,service};
+  const patientApp=getApps().find(a=>a.name==="amal-patient-lookup")||initializeApp({credential:cert(credentials),projectId:"nabdapp-3a077"},"amal-patient-lookup");
+  cachedBackend={db,service,patientDb:getFirestore(patientApp)};
   return cachedBackend;
 }
 export function bookingRouter(backendProvider=getBookingBackend) {
